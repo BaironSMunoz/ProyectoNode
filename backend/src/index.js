@@ -97,6 +97,70 @@ app.post('/api/movimientos', async (req, res) => {
     }
 });
 
+
+
+
+// PUT: Actualizar perfil, (los usuarios)
+//para este endpoint los campos nombre_completo, email y telefono son obligatorios
+app.put('/api/usuarios/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre_completo, email, telefono } = req.body;
+
+        const query = `
+            UPDATE usuarios 
+            SET nombre_completo = $1, email = $2, telefono = $3 
+            WHERE id = $4 
+            RETURNING *
+        `;
+        const values = [nombre_completo, email, telefono, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Usuario no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Perfil actualizado correctamente",
+            usuario: resultado.rows[0]
+        });
+    } catch (error) {
+        res.status(500).send('Error al actualizar el perfil: ' + error.message);
+    }
+});
+
+
+
+// PUT: Actualizar datos de transacción
+app.put('/api/movimientos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { categoria_id, monto, descripcion } = req.body;
+
+        const query = `
+            UPDATE movimientos 
+            SET categoria_id = $1, monto = $2, descripcion = $3 
+            WHERE id = $4 
+            RETURNING *
+        `;
+        const values = [categoria_id, monto, descripcion, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Movimiento no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Transacción actualizada correctamente",
+            movimiento: resultado.rows[0]
+        });
+    } catch (error) {
+        res.status(500).send('Error al actualizar la transacción: ' + error.message);
+    }
+});
+
+
+
 // Levantar el servidor
 app.listen(port, () => {
     console.log(`Servidor escuchando en el puerto: ${port}`);
