@@ -1,4 +1,5 @@
-🚀 Guía Rápida para el Equipo
+Guia para la ejecución y subida de cambios al repositorio: 
+
 1. Configuración Inicial
 Si acabas de clonar el proyecto o hay cambios nuevos:
 
