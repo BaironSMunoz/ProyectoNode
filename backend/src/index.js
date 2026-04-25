@@ -37,6 +37,66 @@ app.post('/api/usuarios', async (req, res) => {
     }
 });
 
+//Primer endpoint para la primera entrega
+//Post de categorias
+app.post('/api/categorias', async (req, res) => {
+    try {
+        const { usuario_id, nombre, tipo, descripcion } = req.body;
+
+        if (!usuario_id || !nombre || !tipo) {
+            return res.status(400).json({
+                mensaje: "Error: usuario_id, nombre y tipo son obligatorios"
+            });
+        }
+
+        const query = `
+            INSERT INTO categorias (usuario_id, nombre, tipo, descripcion) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING *
+        `;
+        const values = [usuario_id, nombre, tipo, descripcion];
+        const resultado = await pool.query(query, values);
+
+        res.status(201).json({
+            mensaje: "Categoría agregada correctamente",
+            categoria: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al agregar la categoria ' + error.message);
+    }
+});
+
+//Primer endpoint para la primera entrega
+//Post de Movimientos
+app.post('/api/movimientos', async (req, res) => {
+    try {
+        const { usuario_id, categoria_id, monto, descripcion } = req.body;
+
+        if (!usuario_id || !categoria_id || !monto || !descripcion) {
+            return res.status(400).json({
+                mensaje: "Error: usuario_id, categoria_id, monto y descripcion son obligatorios"
+            });
+        }
+
+        const query = `
+            INSERT INTO movimientos (usuario_id, categoria_id, monto, descripcion) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING *
+        `;
+        const values = [usuario_id, categoria_id, monto, descripcion];
+        const resultado = await pool.query(query, values);
+
+        res.status(201).json({
+            mensaje: "Movimiento registrado con éxito",
+            movimiento: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al registrar el movimiento: ' + error.message);
+    }
+});
+
 // Levantar el servidor
 app.listen(port, () => {
     console.log(`Servidor escuchando en el puerto: ${port}`);
