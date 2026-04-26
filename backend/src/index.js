@@ -159,6 +159,41 @@ app.put('/api/movimientos/:id', async (req, res) => {
     }
 });
 
+//Get obtenet listado de movimientos por usuario
+app.get('/api/movimientos/usuario/:usuario_id', async (req, res) => {
+    try {
+        const { usuario_id } = req.params;
+        const query = 'SELECT * FROM movimientos WHERE usuario_id = $1 ORDER BY fecha DESC';
+        const resultado = await pool.query(query, [usuario_id]);
+
+        res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        res.status(500).send('No se pudo obtener los movimientos: ' + error.message);
+    }
+});
+
+//Get de resumen financiero por usuario
+app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
+    try {
+        const { usuario_id } = req.params;
+        const query = `
+            SELECT c.tipo, SUM(m.monto) as total
+            FROM movimientos m
+            JOIN categorias c ON m.categoria_id = c.id
+            WHERE m.usuario_id = $1
+            GROUP BY c.tipo
+        `;
+        const resultado = await pool.query(query, [usuario_id]);
+
+        res.status(200).json({
+            usuario_id,
+            resumen: resultado.rows
+        });
+    } catch (error) {
+        res.status(500).send('No se pudo obtener el resumen financiero: ' + error.message);
+    }
+});
 
 
 // Levantar el servidor
