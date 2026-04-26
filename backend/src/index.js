@@ -6,7 +6,7 @@ const port = 3000;
 
 app.use(express.json());
 
-//ENDPOINT NECESARIO PARA LOS DEMÁS SOLICITADOS
+//Metodo post para usuarios (necesario para los demas 10 endpoints de la entrega)
 app.post('/api/usuarios', async (req, res) => {
     try {
         const { nombre_completo, email, telefono } = req.body;
@@ -37,8 +37,11 @@ app.post('/api/usuarios', async (req, res) => {
     }
 });
 
-//Primer endpoint para la primera entrega
-//Post de categorias
+//=================================================================================================================
+//Primera entrega de 10 Endpoints:
+//=================================================================================================================
+
+//Metodo POST de categorias:
 app.post('/api/categorias', async (req, res) => {
     try {
         const { usuario_id, nombre, tipo, descripcion } = req.body;
@@ -67,8 +70,7 @@ app.post('/api/categorias', async (req, res) => {
     }
 });
 
-//Primer endpoint para la primera entrega
-//Post de Movimientos
+//Metodo POST de movimientos:
 app.post('/api/movimientos', async (req, res) => {
     try {
         const { usuario_id, categoria_id, monto, descripcion } = req.body;
@@ -97,10 +99,9 @@ app.post('/api/movimientos', async (req, res) => {
     }
 });
 
+//=================================================================================================================
 
-
-
-// PUT: Actualizar perfil, (los usuarios)
+//Metodo PUT de usuarios por id:
 //para este endpoint los campos nombre_completo, email y telefono son obligatorios
 app.put('/api/usuarios/:id', async (req, res) => {
     try {
@@ -129,9 +130,7 @@ app.put('/api/usuarios/:id', async (req, res) => {
     }
 });
 
-
-
-// PUT: Actualizar datos de transacción
+//Metodo PUT de movimientos por id:
 app.put('/api/movimientos/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -159,7 +158,9 @@ app.put('/api/movimientos/:id', async (req, res) => {
     }
 });
 
-//Get obtenet listado de movimientos por usuario
+//=================================================================================================================
+
+//Metodo Get para listar povimientos por usuario
 app.get('/api/movimientos/usuario/:usuario_id', async (req, res) => {
     try {
         const { usuario_id } = req.params;
@@ -173,7 +174,7 @@ app.get('/api/movimientos/usuario/:usuario_id', async (req, res) => {
     }
 });
 
-//Get de resumen financiero por usuario
+//Metodo Get de resumen financiero por usuario
 app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
     try {
         const { usuario_id } = req.params;
@@ -195,6 +196,7 @@ app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
     }
 });
 
+//=================================================================================================================
 
 // Levantar el servidor
 app.listen(port, () => {
