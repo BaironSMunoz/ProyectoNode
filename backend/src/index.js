@@ -198,6 +198,82 @@ app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
 
 //=================================================================================================================
 
+// PATCH - Cambiar solo la descripción de un movimiento
+app.patch('/api/movimientos/:id/descripcion', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { descripcion } = req.body;
+
+        if (!descripcion) {
+            return res.status(400).json({
+                mensaje: "Error: la descripción es obligatoria"
+            });
+        }
+
+        const query = `
+            UPDATE movimientos 
+            SET descripcion = $1 
+            WHERE id = $2 
+            RETURNING *
+        `;
+        const values = [descripcion, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Movimiento no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Descripción actualizada correctamente",
+            movimiento: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al actualizar la descripción: ' + error.message);
+    }
+});
+
+// PATCH - Cambiar solo el monto de un movimiento
+app.patch('/api/movimientos/:id/monto', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { monto } = req.body;
+
+        if (monto === undefined || monto === null) {
+            return res.status(400).json({
+                mensaje: "Error: el monto es obligatorio"
+            });
+        }
+
+        if (isNaN(monto) || Number(monto) <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el monto debe ser un número mayor a 0"
+            });
+        }
+
+        const query = `
+            UPDATE movimientos 
+            SET monto = $1 
+            WHERE id = $2 
+            RETURNING *
+        `;
+        const values = [monto, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Movimiento no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Monto actualizado correctamente",
+            movimiento: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al actualizar el monto: ' + error.message);
+    }
+});
+
 // Levantar el servidor
 app.listen(port, () => {
     console.log(`Servidor escuchando en el puerto: ${port}`);
