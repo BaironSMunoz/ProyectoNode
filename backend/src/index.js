@@ -274,6 +274,55 @@ app.patch('/api/movimientos/:id/monto', async (req, res) => {
     }
 });
 
+
+// DELETE - Eliminar una transacción (movimiento) por ID
+app.delete('/api/movimientos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const query = 'DELETE FROM movimientos WHERE id = $1 RETURNING *';
+        const resultado = await pool.query(query, [id]);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Transacción no encontrada" });
+        }
+
+        res.status(200).json({
+            mensaje: "Transacción eliminada correctamente",
+            movimiento: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al eliminar la transacción: ' + error.message);
+    }
+});
+
+// DELETE - Eliminar una categoría por ID
+app.delete('/api/categorias/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Nota: Si hay movimientos asociados a esta categoría, 
+        // la base de datos podría dar error por restricción de llave foránea.
+        const query = 'DELETE FROM categorias WHERE id = $1 RETURNING *';
+        const resultado = await pool.query(query, [id]);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Categoría no encontrada" });
+        }
+
+        res.status(200).json({
+            mensaje: "Categoría eliminada correctamente",
+            categoria: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al eliminar la categoría: ' + error.message);
+    }
+});
+
+
+
 // Levantar el servidor
 app.listen(port, () => {
     console.log(`Servidor escuchando en el puerto: ${port}`);
