@@ -1,3 +1,10 @@
+//INTEGRANTES:
+// - Matias Aguilera Ibarra
+// - Benjamin Jimenez Chandia
+// - Cristian Jimenez Fuentes
+// - Bairon Muñoz Sepúlveda
+// - Valentina Zuñiga Salamanca
+
 const express = require('express');
 const pool = require('./db');
 
@@ -302,8 +309,9 @@ app.delete('/api/categorias/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Nota: Si hay movimientos asociados a esta categoría, 
-        // la base de datos podría dar error por restricción de llave foránea.
+        //Nota: Hay una restriccion
+        //La base de datos podria dar error por restriccion de la llave foranea porque el sistema protege los datos
+        //no se borra una categoria si todavia hay registros de gastos que dependan de ella
         const query = 'DELETE FROM categorias WHERE id = $1 RETURNING *';
         const resultado = await pool.query(query, [id]);
 
