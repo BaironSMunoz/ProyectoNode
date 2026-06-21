@@ -13,6 +13,7 @@ const port = 3000;
 
 app.use(express.json());
 
+
 //Metodo post para usuarios (necesario para los demas 10 endpoints de la entrega)
 app.post('/api/usuarios', async (req, res) => {
     try {
@@ -326,6 +327,385 @@ app.delete('/api/categorias/:id', async (req, res) => {
 
     } catch (error) {
         res.status(500).send('Error al eliminar la categoría: ' + error.message);
+    }
+});
+
+
+//=================================================================================================================
+//Segunda entrega de 10 Endpoints:
+//=================================================================================================================
+
+// POST - Crear un presupuesto mensual
+// El usuario define un tope de gasto para una categoría y un mes/año específico
+app.post('/api/presupuestos', async (req, res) => {
+    try {
+        const { usuario_id, categoria_id, monto_limite, mes, anio } = req.body;
+
+        if (!usuario_id || !categoria_id || !monto_limite || !mes || !anio) {
+            return res.status(400).json({
+                mensaje: "Error: usuario_id, categoria_id, monto_limite, mes y anio son obligatorios"
+            });
+        }
+
+        if (mes < 1 || mes > 12) {
+            return res.status(400).json({
+                mensaje: "Error: el mes debe ser un valor entre 1 y 12"
+            });
+        }
+
+        if (monto_limite <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el monto_limite debe ser mayor a 0"
+            });
+        }
+
+        const query = `
+            INSERT INTO presupuestos (usuario_id, categoria_id, monto_limite, mes, anio)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *
+        `;
+        const values = [usuario_id, categoria_id, monto_limite, mes, anio];
+        const resultado = await pool.query(query, values);
+
+        res.status(201).json({
+            mensaje: "Presupuesto creado correctamente",
+            presupuesto: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al crear el presupuesto: ' + error.message);
+    }
+});
+
+// POST - Crear una meta de ahorro
+// Registra un objetivo financiero a largo plazo con un monto objetivo y fecha límite
+app.post('/api/metas', async (req, res) => {
+    try {
+        const { usuario_id, nombre, monto_objetivo, fecha_limite } = req.body;
+
+        if (!usuario_id || !nombre || !monto_objetivo) {
+            return res.status(400).json({
+                mensaje: "Error: usuario_id, nombre y monto_objetivo son obligatorios"
+            });
+        }
+
+        if (monto_objetivo <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el monto_objetivo debe ser mayor a 0"
+            });
+        }
+
+        const query = `
+            INSERT INTO metas (usuario_id, nombre, monto_objetivo, monto_ahorrado, fecha_limite)
+            VALUES ($1, $2, $3, 0, $4)
+            RETURNING *
+        `;
+        const values = [usuario_id, nombre, monto_objetivo, fecha_limite || null];
+        const resultado = await pool.query(query, values);
+
+        res.status(201).json({
+            mensaje: "Meta de ahorro creada correctamente",
+            meta: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al crear la meta: ' + error.message);
+    }
+});
+
+//=================================================================================================================
+
+// GET - Listar presupuestos de un usuario con estado "en verde" o "en rojo"
+// Compara el gasto real del mes/año con el monto límite configurado
+app.get('/api/presupuestos/usuario/:usuario_id', async (req, res) => {
+    try {
+        const { usuario_id } = req.params;
+
+        const query = `
+            SELECT
+                p.id,
+                p.usuario_id,
+                p.categoria_id,
+                c.nombre AS categoria_nombre,
+                c.tipo AS categoria_tipo,
+                p.monto_limite,
+                p.mes,
+                p.anio,
+                COALESCE(SUM(m.monto), 0) AS gasto_actual,
+                CASE
+                    WHEN COALESCE(SUM(m.monto), 0) <= p.monto_limite THEN 'en verde'
+                    ELSE 'en rojo'
+                END AS estado
+            FROM presupuestos p
+            JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN movimientos m
+                ON m.categoria_id = p.categoria_id
+                AND m.usuario_id = p.usuario_id
+                AND EXTRACT(MONTH FROM m.fecha) = p.mes
+                AND EXTRACT(YEAR FROM m.fecha) = p.anio
+            WHERE p.usuario_id = $1
+            GROUP BY p.id, p.usuario_id, p.categoria_id, c.nombre, c.tipo, p.monto_limite, p.mes, p.anio
+            ORDER BY p.anio DESC, p.mes DESC
+        `;
+        const resultado = await pool.query(query, [usuario_id]);
+
+        res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        res.status(500).send('Error al obtener los presupuestos: ' + error.message);
+    }
+});
+
+// GET - Listar metas de ahorro de un usuario con progreso acumulado
+// Devuelve cada meta con el porcentaje de avance calculado
+app.get('/api/metas/usuario/:usuario_id', async (req, res) => {
+    try {
+        const { usuario_id } = req.params;
+
+        const query = `
+            SELECT
+                id,
+                usuario_id,
+                nombre,
+                monto_objetivo,
+                monto_ahorrado,
+                fecha_limite,
+                ROUND((monto_ahorrado * 100.0 / NULLIF(monto_objetivo, 0)), 2) AS porcentaje_progreso,
+                CASE
+                    WHEN monto_ahorrado >= monto_objetivo THEN 'completada'
+                    WHEN fecha_limite IS NOT NULL AND fecha_limite < CURRENT_DATE THEN 'vencida'
+                    ELSE 'en progreso'
+                END AS estado
+            FROM metas
+            WHERE usuario_id = $1
+            ORDER BY fecha_limite ASC NULLS LAST
+        `;
+        const resultado = await pool.query(query, [usuario_id]);
+
+        res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        res.status(500).send('Error al obtener las metas: ' + error.message);
+    }
+});
+
+//=================================================================================================================
+
+// PUT - Actualizar presupuesto completo
+// Reemplaza la configuración completa: monto límite, mes/año y categoría
+app.put('/api/presupuestos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { categoria_id, monto_limite, mes, anio } = req.body;
+
+        if (!categoria_id || !monto_limite || !mes || !anio) {
+            return res.status(400).json({
+                mensaje: "Error: categoria_id, monto_limite, mes y anio son obligatorios"
+            });
+        }
+
+        if (mes < 1 || mes > 12) {
+            return res.status(400).json({
+                mensaje: "Error: el mes debe ser un valor entre 1 y 12"
+            });
+        }
+
+        const query = `
+            UPDATE presupuestos
+            SET categoria_id = $1, monto_limite = $2, mes = $3, anio = $4
+            WHERE id = $5
+            RETURNING *
+        `;
+        const values = [categoria_id, monto_limite, mes, anio, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Presupuesto no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Presupuesto actualizado correctamente",
+            presupuesto: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al actualizar el presupuesto: ' + error.message);
+    }
+});
+
+// PUT - Actualizar meta de ahorro completa
+// Modifica todos los parámetros base: nombre, monto objetivo y fecha límite
+app.put('/api/metas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, monto_objetivo, fecha_limite } = req.body;
+
+        if (!nombre || !monto_objetivo) {
+            return res.status(400).json({
+                mensaje: "Error: nombre y monto_objetivo son obligatorios"
+            });
+        }
+
+        if (monto_objetivo <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el monto_objetivo debe ser mayor a 0"
+            });
+        }
+
+        const query = `
+            UPDATE metas
+            SET nombre = $1, monto_objetivo = $2, fecha_limite = $3
+            WHERE id = $4
+            RETURNING *
+        `;
+        const values = [nombre, monto_objetivo, fecha_limite || null, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Meta no encontrada" });
+        }
+
+        res.status(200).json({
+            mensaje: "Meta actualizada correctamente",
+            meta: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al actualizar la meta: ' + error.message);
+    }
+});
+
+//=================================================================================================================
+
+// PATCH - Modificar solo el monto límite de un presupuesto
+// Ajusta rápidamente el tope sin alterar categoría ni fechas
+app.patch('/api/presupuestos/:id/monto', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { monto_limite } = req.body;
+
+        if (monto_limite === undefined || monto_limite === null) {
+            return res.status(400).json({
+                mensaje: "Error: el monto_limite es obligatorio"
+            });
+        }
+
+        if (isNaN(monto_limite) || Number(monto_limite) <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el monto_limite debe ser un número mayor a 0"
+            });
+        }
+
+        const query = `
+            UPDATE presupuestos
+            SET monto_limite = $1
+            WHERE id = $2
+            RETURNING *
+        `;
+        const values = [monto_limite, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Presupuesto no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Monto límite actualizado correctamente",
+            presupuesto: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al actualizar el monto límite: ' + error.message);
+    }
+});
+
+// PATCH - Abonar saldo a una meta de ahorro
+// Suma un abono al monto_ahorrado acumulado (monto_ahorrado = monto_ahorrado + abono)
+app.patch('/api/metas/:id/ahorrado', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { abono } = req.body;
+
+        if (abono === undefined || abono === null) {
+            return res.status(400).json({
+                mensaje: "Error: el abono es obligatorio"
+            });
+        }
+
+        if (isNaN(abono) || Number(abono) <= 0) {
+            return res.status(400).json({
+                mensaje: "Error: el abono debe ser un número mayor a 0"
+            });
+        }
+
+        const query = `
+            UPDATE metas
+            SET monto_ahorrado = monto_ahorrado + $1
+            WHERE id = $2
+            RETURNING *
+        `;
+        const values = [abono, id];
+        const resultado = await pool.query(query, values);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Meta no encontrada" });
+        }
+
+        res.status(200).json({
+            mensaje: "Abono registrado correctamente",
+            meta: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al registrar el abono: ' + error.message);
+    }
+});
+
+//=================================================================================================================
+
+// DELETE - Eliminar un presupuesto por ID
+// Remueve el límite mensual para que deje de alertar al usuario
+app.delete('/api/presupuestos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const query = 'DELETE FROM presupuestos WHERE id = $1 RETURNING *';
+        const resultado = await pool.query(query, [id]);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Presupuesto no encontrado" });
+        }
+
+        res.status(200).json({
+            mensaje: "Presupuesto eliminado correctamente",
+            presupuesto: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al eliminar el presupuesto: ' + error.message);
+    }
+});
+
+// DELETE - Eliminar una meta de ahorro por ID
+// Cancela el objetivo y lo borra de la base de datos de manera definitiva
+app.delete('/api/metas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const query = 'DELETE FROM metas WHERE id = $1 RETURNING *';
+        const resultado = await pool.query(query, [id]);
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({ mensaje: "Meta no encontrada" });
+        }
+
+        res.status(200).json({
+            mensaje: "Meta eliminada correctamente",
+            meta: resultado.rows[0]
+        });
+
+    } catch (error) {
+        res.status(500).send('Error al eliminar la meta: ' + error.message);
     }
 });
 
