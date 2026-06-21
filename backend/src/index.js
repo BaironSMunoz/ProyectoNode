@@ -6,12 +6,15 @@
 // - Valentina Zuñiga Salamanca
 
 const express = require('express');
+const path = require('path');
 const pool = require('./db');
 
 const app = express();
 const port = 3000;
 
+app.use(express.static(path.join(__dirname, '../../frontend')));
 app.use(express.json());
+
 
 
 //Metodo post para usuarios (necesario para los demas 10 endpoints de la entrega)
@@ -42,6 +45,17 @@ app.post('/api/usuarios', async (req, res) => {
 
     } catch (error) {
         res.status(500).send('Error al agregar el usuario ' + error.message);
+    }
+});
+
+//Metodo get para listar todos los usuarios
+app.get('/api/usuarios', async (req, res) => {
+    try {
+        const query = 'SELECT * FROM usuarios ORDER BY id ASC';
+        const resultado = await pool.query(query);
+        res.status(200).json(resultado.rows);
+    } catch (error) {
+        res.status(500).send('Error al obtener los usuarios: ' + error.message);
     }
 });
 
@@ -201,6 +215,18 @@ app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
         });
     } catch (error) {
         res.status(500).send('No se pudo obtener el resumen financiero: ' + error.message);
+    }
+});
+
+//Metodo Get para listar categorias por usuario
+app.get('/api/categorias/usuario/:usuario_id', async (req, res) => {
+    try {
+        const { usuario_id } = req.params;
+        const query = 'SELECT * FROM categorias WHERE usuario_id = $1 ORDER BY nombre ASC';
+        const resultado = await pool.query(query, [usuario_id]);
+        res.status(200).json(resultado.rows);
+    } catch (error) {
+        res.status(500).send('No se pudo obtener las categorias: ' + error.message);
     }
 });
 
@@ -709,9 +735,7 @@ app.delete('/api/metas/:id', async (req, res) => {
     }
 });
 
-
-
 // Levantar el servidor
 app.listen(port, () => {
-    console.log(`Servidor escuchando en el puerto: ${port}`);
+    console.log(`Servidor corriendo en http://localhost:${port}`);
 });
