@@ -201,11 +201,11 @@ app.get('/api/resumen/usuario/:usuario_id', async (req, res) => {
     try {
         const { usuario_id } = req.params;
         const query = `
-            SELECT c.tipo, SUM(m.monto) as total
+            SELECT LOWER(c.tipo) as tipo, SUM(m.monto) as total
             FROM movimientos m
             JOIN categorias c ON m.categoria_id = c.id
             WHERE m.usuario_id = $1
-            GROUP BY c.tipo
+            GROUP BY LOWER(c.tipo)
         `;
         const resultado = await pool.query(query, [usuario_id]);
 
@@ -336,9 +336,22 @@ app.delete('/api/categorias/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        //Nota: Hay una restriccion
-        //La base de datos podria dar error por restriccion de la llave foranea porque el sistema protege los datos
-        //no se borra una categoria si todavia hay registros de gastos que dependan de ella
+        // Verificar si existen movimientos asociados
+        const checkMovs = await pool.query('SELECT 1 FROM movimientos WHERE categoria_id = $1 LIMIT 1', [id]);
+        if (checkMovs.rowCount > 0) {
+            return res.status(400).json({ 
+                mensaje: "No se puede eliminar la categoría porque tiene movimientos asociados" 
+            });
+        }
+
+        // Verificar si existen presupuestos asociados
+        const checkPresupuestos = await pool.query('SELECT 1 FROM presupuestos WHERE categoria_id = $1 LIMIT 1', [id]);
+        if (checkPresupuestos.rowCount > 0) {
+            return res.status(400).json({ 
+                mensaje: "No se puede eliminar la categoría porque tiene presupuestos asociados" 
+            });
+        }
+
         const query = 'DELETE FROM categorias WHERE id = $1 RETURNING *';
         const resultado = await pool.query(query, [id]);
 
@@ -459,8 +472,9 @@ app.get('/api/presupuestos/usuario/:usuario_id', async (req, res) => {
                 p.anio,
                 COALESCE(SUM(m.monto), 0) AS gasto_actual,
                 CASE
-                    WHEN COALESCE(SUM(m.monto), 0) <= p.monto_limite THEN 'en verde'
-                    ELSE 'en rojo'
+                    WHEN COALESCE(SUM(m.monto), 0) > p.monto_limite THEN 'en rojo'
+                    WHEN COALESCE(SUM(m.monto), 0) >= (p.monto_limite * 0.70) THEN 'en amarillo'
+                    ELSE 'en verde'
                 END AS estado
             FROM presupuestos p
             JOIN categorias c ON p.categoria_id = c.id
