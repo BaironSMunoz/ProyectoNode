@@ -492,7 +492,7 @@ main {
 /* ── GRID ── */
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 12px;
 }
 
@@ -616,6 +616,10 @@ main {
     color: var(--red);
 }
 
+.val-amber {
+    color: var(--amber);
+}
+
 .progress-wrap {
     background: var(--gray-100);
     border-radius: 99px;
@@ -637,6 +641,10 @@ main {
 
 .progress-fill.over {
     background: var(--red);
+}
+
+.progress-fill.warning {
+    background: var(--amber);
 }
 
 .card-foot {
@@ -766,4 +774,45 @@ main {
 ::-webkit-scrollbar-thumb {
     background: var(--gray-200);
     border-radius: 3px;
+}
+
+/* ── INLINE FORM BUBBLE ── */
+.inline-form-bubble {
+    grid-column: 1 / -1;
+    background: #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.bubble-arrow {
+    position: absolute;
+    top: -24px;
+    width: 0;
+    height: 0;
+    border-left: 24px solid transparent;
+    border-right: 24px solid transparent;
+    border-bottom: 24px solid #e5e7eb;
+    transition: left 0.2s ease;
+}
+
+.inline-form-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Ajustes para botones dentro de las tarjetas */
+.card-foot .btn-outline-sm {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+}
+
+.card-foot .btn-delete {
+    padding: 4px 8px;
+    font-size: 0.75rem;
 }

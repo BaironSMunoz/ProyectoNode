@@ -1,13 +1,14 @@
 const API = 'http://localhost:3000/api';
 let USUARIO_ID = null;
 let USUARIO_NOMBRE = '';
+let CATEGORIAS_CACHE = [];
+
 
 function uid() { return USUARIO_ID; }
 function $(id) { return document.getElementById(id); }
 function val(id) { return $(id).value; }
 function num(id) { return Number($(id).value); }
 
-// ─── LOGIN ──────────────────────────────────────────────────
 
 async function cargarLoginUsuarios() {
     const lista = $('login-lista');
@@ -73,7 +74,6 @@ async function crearDesdeLogin() {
     } catch (e) { toast(e.message, false); }
 }
 
-// Iniciar: esconder el layout y cargar usuarios
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.layout').style.display = 'none';
     cargarLoginUsuarios();
@@ -107,8 +107,6 @@ async function req(method, url, body) {
     if (!r.ok) throw new Error(d.mensaje || d.message || 'Error');
     return d;
 }
-
-// ─── USUARIOS ───────────────────────────────────────────────
 
 async function crearUsuario() {
     const nombre_completo = val('u-nombre'), email = val('u-email'), telefono = val('u-tel');
@@ -191,8 +189,6 @@ async function guardarPerfil() {
     } catch (e) { toast(e.message, false); }
 }
 
-// ─── CATEGORÍAS ─────────────────────────────────────────────
-
 async function crearCategoria() {
     const nombre = val('cat-nombre'), tipo = val('cat-tipo'), descripcion = val('cat-desc');
     if (!nombre) { toast('El nombre es obligatorio', false); return; }
@@ -222,57 +218,86 @@ async function listarCategorias() {
                     </div>
                     <span class="badge ${isIngreso ? 'badge-green' : 'badge-red'}">${isIngreso ? 'Ingreso' : 'Gasto'}</span>
                 </div>
+                <div class="card-foot" style="justify-content: flex-end;">
+                    <button class="btn-delete" onclick="deleteCategoria(${cat.id})">Eliminar</button>
+                </div>
             </div>`;
         }).join('');
-    } catch(e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
+    } catch (e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
 }
 
-async function deleteCategoria() {
-    const id = num('del-cat-id');
-    if (!id) { toast('Ingresa el ID', false); return; }
-    if (!confirm(`¿Eliminar categoría ID ${id}?`)) return;
+async function deleteCategoria(id) {
+    if (!id) return;
+    if (!confirm(`¿Eliminar la categoría ID ${id}?`)) return;
     try {
         const d = await req('DELETE', `/categorias/${id}`);
         toast(d.mensaje);
-        toggleForm('form-delete-categoria');
         listarCategorias();
     } catch (e) { toast(e.message, false); }
 }
 
-// ─── MOVIMIENTOS ────────────────────────────────────────────
-
 async function crearMovimiento() {
+    const btn = $('btn-guardar-movimiento');
     const categoria_id = num('mov-cat'), monto = num('mov-monto'), descripcion = val('mov-desc');
     if (!categoria_id || !monto || !descripcion) { toast('Todos los campos son obligatorios', false); return; }
+
+    if (btn) btn.disabled = true;
     try {
         const d = await req('POST', '/movimientos', { usuario_id: uid(), categoria_id, monto, descripcion });
         toast(d.mensaje);
         toggleForm('form-crear-movimiento');
         listarMovimientos();
-    } catch (e) { toast(e.message, false); }
+    } catch (e) { 
+        toast(e.message, false); 
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function listarMovimientos() {
     const c = $('lista-movimientos');
     c.innerHTML = '<p style="color:#9ca3af;padding:12px">Cargando...</p>';
     try {
+        await cargarCategoriasCache();
+
+        // poblar el select del formulario Registrar Movimiento
+        const movCatSelect = $('mov-cat');
+        if (movCatSelect) {
+            if (CATEGORIAS_CACHE.length > 0) {
+                movCatSelect.innerHTML = CATEGORIAS_CACHE.map(cat =>
+                    `<option value="${cat.id}">${cat.nombre} (${cat.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'})</option>`
+                ).join('');
+            } else {
+                movCatSelect.innerHTML = '<option value="">No hay categorías creadas</option>';
+            }
+        }
+
         const d = await req('GET', `/movimientos/usuario/${uid()}`);
         if (!d.length) { c.innerHTML = '<div class="empty">No hay movimientos registrados.</div>'; return; }
-        c.innerHTML = d.map(m => `
-            <div class="card">
+        c.innerHTML = d.map(m => {
+            const cat = CATEGORIAS_CACHE.find(c => c.id === m.categoria_id);
+            const catNombre = cat ? cat.nombre : `Cat. ${m.categoria_id}`;
+            return `
+            <div class="card" id="movimiento-card-${m.id}">
                 <div class="card-stripe stripe-amber"></div>
                 <div class="card-head">
                     <div>
                         <div class="card-title">${m.descripcion}</div>
-                        <div class="card-sub">ID ${m.id} · Cat. ${m.categoria_id} · ${new Date(m.fecha).toLocaleDateString('es-CL')}</div>
+                        <div class="card-sub">ID ${m.id} · ${catNombre} · ${new Date(m.fecha).toLocaleDateString('es-CL')}</div>
                     </div>
                     <span class="badge badge-amber">${money(m.monto)}</span>
                 </div>
                 <div class="card-foot">
                     <span class="card-foot-txt">Usuario ${m.usuario_id}</span>
-                    <button class="btn-delete" onclick="deleteMovimiento(${m.id})">Eliminar</button>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn-outline-sm" onclick="mostrarFormMovActualizar(event, ${m.id}, ${m.categoria_id}, ${m.monto}, '${m.descripcion.replace(/'/g, "\\'")}')">Editar</button>
+                        <button class="btn-outline-sm" onclick="mostrarFormMovDesc(event, ${m.id}, '${m.descripcion.replace(/'/g, "\\'")}')">Desc.</button>
+                        <button class="btn-outline-sm" onclick="mostrarFormMovMonto(event, ${m.id}, ${m.monto})">Monto</button>
+                        <button class="btn-delete" onclick="deleteMovimiento(${m.id})">Eliminar</button>
+                    </div>
                 </div>
-            </div>`).join('');
+            </div>`;
+        }).join('');
     } catch (e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
 }
 
@@ -283,7 +308,7 @@ async function listarResumen() {
         const d = await req('GET', `/resumen/usuario/${uid()}`);
         c.innerHTML = `<div class="card" style="grid-column:1/-1">
             <div class="card-stripe stripe-green"></div>
-            <div class="card-head"><div class="card-title">Resumen financiero — Usuario ${d.usuario_id}</div></div>
+            <div class="card-head"><div class="card-title">Resumen financiero — ${USUARIO_NOMBRE || ('Usuario ' + d.usuario_id)}</div></div>
             <div class="amounts">
                 ${d.resumen.map(r => `
                 <div class="amt-block">
@@ -295,13 +320,103 @@ async function listarResumen() {
     } catch (e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
 }
 
+function mostrarFormMovActualizar(event, id, currentCategoryId, currentMonto, currentDesc) {
+    removeInlineForm();
+
+    const card = $(`movimiento-card-${id}`);
+    if (!card) return;
+
+    const catOptions = CATEGORIAS_CACHE.map(cat =>
+        `<option value="${cat.id}" ${cat.id === currentCategoryId ? 'selected' : ''}>${cat.nombre} (${cat.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'})</option>`
+    ).join('');
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Actualizar movimiento completo</h3>
+            <div class="form-row">
+                <div class="field"><label>ID Movimiento</label><input type="number" id="put-mov-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Categoría</label><select id="put-mov-cat">${catOptions}</select></div>
+                <div class="field"><label>Monto ($)</label><input type="number" id="put-mov-monto" value="${currentMonto}" /></div>
+                <div class="field"><label>Descripción</label><input type="text" id="put-mov-desc" value="${currentDesc}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="putMovimiento()">Actualizar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-movimientos > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
+function mostrarFormMovDesc(event, id, currentDesc) {
+    removeInlineForm();
+
+    const card = $(`movimiento-card-${id}`);
+    if (!card) return;
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Cambiar descripción</h3>
+            <div class="form-row">
+                <div class="field"><label>ID Movimiento</label><input type="number" id="patch-mov-desc-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Nueva descripción</label><input type="text" id="patch-mov-desc-val" value="${currentDesc}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="patchMovDesc()">Aplicar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-movimientos > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
+function mostrarFormMovMonto(event, id, currentMonto) {
+    removeInlineForm();
+
+    const card = $(`movimiento-card-${id}`);
+    if (!card) return;
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Cambiar monto</h3>
+            <div class="form-row">
+                <div class="field"><label>ID Movimiento</label><input type="number" id="patch-mov-monto-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Nuevo monto ($)</label><input type="number" id="patch-mov-monto-val" value="${currentMonto}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="patchMovMonto()">Aplicar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-movimientos > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
 async function putMovimiento() {
     const id = num('put-mov-id'), categoria_id = num('put-mov-cat'), monto = num('put-mov-monto'), descripcion = val('put-mov-desc');
     if (!id || !categoria_id || !monto || !descripcion) { toast('Completa todos los campos', false); return; }
     try {
         const d = await req('PUT', `/movimientos/${id}`, { categoria_id, monto, descripcion });
         toast(d.mensaje);
-        toggleForm('form-put-movimiento');
+        removeInlineForm();
         listarMovimientos();
     } catch (e) { toast(e.message, false); }
 }
@@ -312,7 +427,7 @@ async function patchMovDesc() {
     try {
         const d = await req('PATCH', `/movimientos/${id}/descripcion`, { descripcion });
         toast(d.mensaje);
-        toggleForm('form-patch-mov-desc');
+        removeInlineForm();
         listarMovimientos();
     } catch (e) { toast(e.message, false); }
 }
@@ -323,7 +438,7 @@ async function patchMovMonto() {
     try {
         const d = await req('PATCH', `/movimientos/${id}/monto`, { monto });
         toast(d.mensaje);
-        toggleForm('form-patch-mov-monto');
+        removeInlineForm();
         listarMovimientos();
     } catch (e) { toast(e.message, false); }
 }
@@ -337,7 +452,13 @@ async function deleteMovimiento(id) {
     } catch (e) { toast(e.message, false); }
 }
 
-// ─── PRESUPUESTOS ───────────────────────────────────────────
+async function cargarCategoriasCache() {
+    try {
+        CATEGORIAS_CACHE = await req('GET', `/categorias/usuario/${uid()}`);
+    } catch (e) {
+        console.error('Error al cargar categorías para caché:', e);
+    }
+}
 
 async function crearPresupuesto() {
     const categoria_id = num('p-cat'), monto_limite = num('p-monto'), mes = num('p-mes'), anio = num('p-anio');
@@ -354,29 +475,48 @@ async function listarPresupuestos() {
     const c = $('lista-presupuestos');
     c.innerHTML = '<p style="color:#9ca3af;padding:12px">Cargando...</p>';
     try {
+        await cargarCategoriasCache();
+
+        // poblar el select del formulario Crear Presupuesto
+        const pCatSelect = $('p-cat');
+        if (pCatSelect) {
+            if (CATEGORIAS_CACHE.length > 0) {
+                pCatSelect.innerHTML = CATEGORIAS_CACHE.map(cat =>
+                    `<option value="${cat.id}">${cat.nombre} (${cat.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'})</option>`
+                ).join('');
+            } else {
+                pCatSelect.innerHTML = '<option value="">No hay categorías creadas</option>';
+            }
+        }
+
         const d = await req('GET', `/presupuestos/usuario/${uid()}`);
         if (!d.length) { c.innerHTML = '<div class="empty">No hay presupuestos creados.</div>'; return; }
+
         c.innerHTML = d.map(p => {
             const pct = Math.min((p.gasto_actual / p.monto_limite) * 100, 100);
-            const verde = p.estado === 'en verde';
+            const color = p.estado === 'en verde' ? 'green' : (p.estado === 'en amarillo' ? 'amber' : 'red');
+            const texto = p.estado === 'en verde' ? 'En verde' : (p.estado === 'en amarillo' ? 'Alerta 70%' : 'En rojo');
+            const progClass = p.estado === 'en rojo' ? 'over' : (p.estado === 'en amarillo' ? 'warning' : '');
             return `
-            <div class="card">
-                <div class="card-stripe ${verde ? 'stripe-green' : 'stripe-red'}"></div>
+            <div class="card" id="presupuesto-card-${p.id}">
+                <div class="card-stripe stripe-${color}"></div>
                 <div class="card-head">
                     <div>
                         <div class="card-title">${p.categoria_nombre || 'Cat. ' + p.categoria_id}</div>
                         <div class="card-sub">${mes(p.mes)} ${p.anio} · ID ${p.id}</div>
                     </div>
-                    <span class="badge ${verde ? 'badge-green' : 'badge-red'}">${verde ? 'En verde' : 'En rojo'}</span>
+                    <span class="badge badge-${color}">${texto}</span>
                 </div>
                 <div class="amounts">
-                    <div class="amt-block"><div class="lbl">Gastado</div><div class="val ${verde ? 'val-green' : 'val-red'}">${money(p.gasto_actual)}</div></div>
+                    <div class="amt-block"><div class="lbl">Gastado</div><div class="val val-${color}">${money(p.gasto_actual)}</div></div>
                     <div class="amt-block" style="text-align:right"><div class="lbl">Límite</div><div class="val">${money(p.monto_limite)}</div></div>
                 </div>
-                <div class="progress-wrap"><div class="progress-fill ${pct >= 100 ? 'over' : ''}" style="width:${pct.toFixed(1)}%"></div></div>
+                <div class="progress-wrap"><div class="progress-fill ${progClass}" style="width:${pct.toFixed(1)}%"></div></div>
                 <div class="card-foot">
                     <span class="card-foot-txt">${pct.toFixed(1)}% utilizado</span>
-                    <div style="display:flex;gap:6px">
+                    <div style="display:flex;gap:4px">
+                        <button class="btn-outline-sm" onclick="mostrarFormActualizar(event, ${p.id}, ${p.categoria_id}, ${p.monto_limite}, ${p.mes}, ${p.anio})">Actualizar</button>
+                        <button class="btn-outline-sm" onclick="mostrarFormMonto(event, ${p.id}, ${p.monto_limite})">Monto</button>
                         <button class="btn-delete" onclick="deletePresupuesto(${p.id})">Eliminar</button>
                     </div>
                 </div>
@@ -385,13 +525,128 @@ async function listarPresupuestos() {
     } catch (e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
 }
 
+function removeInlineForm() {
+    const existing = $('inline-form-container');
+    if (existing) {
+        existing.remove();
+    }
+}
+
+function getInsertTargetCard(card, selector) {
+    const allCards = Array.from(document.querySelectorAll(selector));
+    if (!allCards.length) return card;
+    const targetTop = card.offsetTop;
+    const rowCards = allCards.filter(c => Math.abs(c.offsetTop - targetTop) < 8);
+    return rowCards[rowCards.length - 1] || card;
+}
+
+function mostrarFormActualizar(event, id, currentCategoryId, currentMonto, currentMes, currentAnio) {
+    removeInlineForm();
+
+    const card = $(`presupuesto-card-${id}`);
+    if (!card) return;
+
+    const catOptions = CATEGORIAS_CACHE.map(cat =>
+        `<option value="${cat.id}" ${cat.id === currentCategoryId ? 'selected' : ''}>${cat.nombre} (${cat.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'})</option>`
+    ).join('');
+
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesOptions = meses.map((m, i) => `<option value="${i + 1}" ${i + 1 === currentMes ? 'selected' : ''}>${m}</option>`).join('');
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Actualizar presupuesto completo</h3>
+            <div class="form-row">
+                <div class="field"><label>ID</label><input type="number" id="put-p-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Categoría</label><select id="put-p-cat">${catOptions}</select></div>
+                <div class="field"><label>Monto límite ($)</label><input type="number" id="put-p-monto" value="${currentMonto}" /></div>
+                <div class="field"><label>Mes</label><select id="put-p-mes">${mesOptions}</select></div>
+                <div class="field"><label>Año</label><input type="number" id="put-p-anio" value="${currentAnio}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="putPresupuesto()">Actualizar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-presupuestos > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
+function mostrarFormMonto(event, id, currentMonto) {
+    removeInlineForm();
+
+    const card = $(`presupuesto-card-${id}`);
+    if (!card) return;
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Cambiar monto límite</h3>
+            <div class="form-row">
+                <div class="field"><label>ID Presupuesto</label><input type="number" id="patch-p-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Nuevo monto ($)</label><input type="number" id="patch-p-monto" value="${currentMonto}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="patchPresupuesto()">Aplicar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-presupuestos > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
+function posicionarFlecha(card) {
+    const container = $('inline-form-container');
+    const arrow = $('bubble-arrow');
+    const grid = $('lista-presupuestos') || $('lista-metas') || $('lista-movimientos');
+    if (!container || !arrow || !grid) return;
+
+    const cardRect = card.getBoundingClientRect();
+    const gridRect = grid.getBoundingClientRect();
+
+    let leftOffset = cardRect.left - gridRect.left + (cardRect.width / 2) - 24;
+
+    const containerWidth = container.offsetWidth;
+    if (leftOffset < 24) leftOffset = 24;
+    if (leftOffset > containerWidth - 48) leftOffset = containerWidth - 48;
+
+    arrow.style.left = `${leftOffset}px`;
+}
+
+window.addEventListener('resize', () => {
+    const container = $('inline-form-container');
+    if (container) {
+        const idInput = $('put-p-id') || $('patch-p-id') || $('put-m-id') || $('patch-m-id') || $('put-mov-id') || $('patch-mov-desc-id') || $('patch-mov-monto-id');
+        if (idInput) {
+            const isMeta = idInput.id.includes('-m-');
+            const isMov = idInput.id.includes('-mov-');
+            let prefix = 'presupuesto-card-';
+            if (isMeta) prefix = 'meta-card-';
+            else if (isMov) prefix = 'movimiento-card-';
+            const card = $(prefix + idInput.value);
+            if (card) posicionarFlecha(card);
+        }
+    }
+});
+
 async function putPresupuesto() {
     const id = num('put-p-id'), categoria_id = num('put-p-cat'), monto_limite = num('put-p-monto'), mes = num('put-p-mes'), anio = num('put-p-anio');
     if (!id || !categoria_id || !monto_limite) { toast('Completa todos los campos', false); return; }
     try {
         const d = await req('PUT', `/presupuestos/${id}`, { categoria_id, monto_limite, mes, anio });
         toast(d.mensaje);
-        toggleForm('form-put-presupuesto');
+        removeInlineForm();
         listarPresupuestos();
     } catch (e) { toast(e.message, false); }
 }
@@ -402,16 +657,9 @@ async function patchPresupuesto() {
     try {
         const d = await req('PATCH', `/presupuestos/${id}/monto`, { monto_limite });
         toast(d.mensaje);
-        toggleForm('form-patch-presupuesto');
+        removeInlineForm();
         listarPresupuestos();
     } catch (e) { toast(e.message, false); }
-}
-
-function prefillPatchPresupuesto(id) {
-    $('patch-p-id').value = id;
-    const form = $('form-patch-presupuesto');
-    form.classList.remove('hidden');
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function deletePresupuesto(id) {
@@ -420,7 +668,6 @@ async function deletePresupuesto(id) {
     catch (e) { toast(e.message, false); }
 }
 
-// ─── METAS ──────────────────────────────────────────────────
 
 async function crearMeta() {
     const nombre = val('m-nombre'), monto_objetivo = num('m-objetivo'), fecha_limite = val('m-fecha') || null;
@@ -447,8 +694,9 @@ async function listarMetas() {
             const bt = done ? 'Completada' : exp ? 'Vencida' : 'En progreso';
             const sc = done ? 'stripe-green' : exp ? 'stripe-red' : 'stripe-blue';
             const fecha = m.fecha_limite ? new Date(m.fecha_limite).toLocaleDateString('es-CL') : '—';
+            const fechaVal = m.fecha_limite ? new Date(m.fecha_limite).toLocaleDateString('en-CA') : '';
             return `
-            <div class="card">
+            <div class="card" id="meta-card-${m.id}">
                 <div class="card-stripe ${sc}"></div>
                 <div class="card-head">
                     <div><div class="card-title">${m.nombre}</div><div class="card-sub">ID ${m.id} · Límite: ${fecha}</div></div>
@@ -462,8 +710,9 @@ async function listarMetas() {
                 <div class="progress-wrap"><div class="progress-fill ${done ? 'full' : ''}" style="width:${pct}%"></div></div>
                 <div class="card-foot">
                     <span class="card-foot-txt">${pct.toFixed(1)}% completado</span>
-                    <div style="display:flex;gap:6px">
-                        <button class="btn-outline-sm" onclick="prefillPatchMeta(${m.id})">Abonar</button>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn-outline-sm" onclick="mostrarFormMetaActualizar(event, ${m.id}, '${m.nombre.replace(/'/g, "\\'")}', ${m.monto_objetivo}, '${fechaVal}')">Actualizar</button>
+                        <button class="btn-outline-sm" onclick="mostrarFormMetaAbonar(event, ${m.id})">Abonar</button>
                         <button class="btn-delete" onclick="deleteMeta(${m.id})">Eliminar</button>
                     </div>
                 </div>
@@ -472,13 +721,71 @@ async function listarMetas() {
     } catch (e) { c.innerHTML = `<p style="color:#dc2626;padding:12px">${e.message}</p>`; }
 }
 
+function mostrarFormMetaActualizar(event, id, currentNombre, currentMonto, currentFecha) {
+    removeInlineForm();
+
+    const card = $(`meta-card-${id}`);
+    if (!card) return;
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Actualizar meta completa</h3>
+            <div class="form-row">
+                <div class="field"><label>ID</label><input type="number" id="put-m-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Nombre</label><input type="text" id="put-m-nombre" value="${currentNombre}" /></div>
+                <div class="field"><label>Monto objetivo ($)</label><input type="number" id="put-m-objetivo" value="${currentMonto}" /></div>
+                <div class="field"><label>Fecha límite</label><input type="date" id="put-m-fecha" value="${currentFecha}" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="putMeta()">Actualizar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-metas > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
+function mostrarFormMetaAbonar(event, id) {
+    removeInlineForm();
+
+    const card = $(`meta-card-${id}`);
+    if (!card) return;
+
+    const html = `
+    <div id="inline-form-container" class="inline-form-bubble">
+        <div class="bubble-arrow" id="bubble-arrow"></div>
+        <div class="inline-form-card">
+            <h3>Abonar a meta</h3>
+            <div class="form-row">
+                <div class="field"><label>ID Meta</label><input type="number" id="patch-m-id" value="${id}" disabled style="background:#e5e7eb;cursor:not-allowed;" /></div>
+                <div class="field"><label>Monto del abono ($)</label><input type="number" id="patch-m-abono" placeholder="Ej: 50000" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-green" onclick="patchMeta()">Abonar</button>
+                <button class="btn-outline" onclick="removeInlineForm()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    const targetCard = getInsertTargetCard(card, '#lista-metas > .card');
+    targetCard.insertAdjacentHTML('afterend', html);
+    posicionarFlecha(card);
+}
+
 async function putMeta() {
     const id = num('put-m-id'), nombre = val('put-m-nombre'), monto_objetivo = num('put-m-objetivo'), fecha_limite = val('put-m-fecha') || null;
     if (!id || !nombre || !monto_objetivo) { toast('Completa todos los campos', false); return; }
     try {
         const d = await req('PUT', `/metas/${id}`, { nombre, monto_objetivo, fecha_limite });
         toast(d.mensaje);
-        toggleForm('form-put-meta');
+        removeInlineForm();
         listarMetas();
     } catch (e) { toast(e.message, false); }
 }
@@ -489,16 +796,9 @@ async function patchMeta() {
     try {
         const d = await req('PATCH', `/metas/${id}/ahorrado`, { abono });
         toast(d.mensaje);
-        toggleForm('form-patch-meta');
+        removeInlineForm();
         listarMetas();
     } catch (e) { toast(e.message, false); }
-}
-
-function prefillPatchMeta(id) {
-    $('patch-m-id').value = id;
-    const form = $('form-patch-meta');
-    form.classList.remove('hidden');
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function deleteMeta(id) {
