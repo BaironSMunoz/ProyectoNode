@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FinanzApp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <!-- Login screen -->
+    <div id="login-screen">
+        <div class="login-box">
+            <div class="login-brand">FinanzApp</div>
+            <p class="login-sub">Selecciona tu perfil para continuar</p>
+            <div id="login-lista">
+                <p style="color:#9ca3af">Cargando usuarios...</p>
+            </div>
+            <p class="login-note">¿No tienes cuenta? <a href="#" onclick="showCrearUsuario()">Crear usuario</a></p>
+        </div>
+    </div>
+
+    <!-- Crear usuario desde login -->
+    <div id="login-crear" class="hidden">
+        <div class="login-box">
+            <div class="login-brand">FinanzApp</div>
+            <p class="login-sub">Nuevo usuario</p>
+            <div class="form-row" style="flex-direction:column;gap:10px;margin-bottom:14px">
+                <input type="text" id="lc-nombre" placeholder="Nombre completo"
+                    style="padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-family:Inter,sans-serif;font-size:0.9rem;outline:none" />
+                <input type="email" id="lc-email" placeholder="Email"
+                    style="padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-family:Inter,sans-serif;font-size:0.9rem;outline:none" />
+                <input type="text" id="lc-tel" placeholder="Teléfono (opcional)"
+                    style="padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-family:Inter,sans-serif;font-size:0.9rem;outline:none" />
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn-green" style="flex:1" onclick="crearDesdeLogin()">Crear y entrar</button>
+                <button class="btn-outline" onclick="volverLogin()">Volver</button>
+            </div>
+        </div>
+    </div>
+
+    <aside class="sidebar hidden" id="sidebar">
+        <div class="sidebar-brand">FinanzApp</div>
+        <nav>
+            <button id="nav-presupuestos" class="nav-item active" onclick="go('presupuestos')">Presupuestos</button>
+            <button id="nav-metas" class="nav-item" onclick="go('metas')">Metas de Ahorro</button>
+            <button id="nav-movimientos" class="nav-item" onclick="go('movimientos')">Movimientos</button>
+            <button id="nav-categorias" class="nav-item" onclick="go('categorias')">Categorías</button>
+        </nav>
+        <div class="sidebar-session">
+            <button class="btn-session" style="width: 100%; text-align: center;" onclick="cerrarSesion()">Cambiar usuario</button>
+        </div>
+    </aside>
+
+    <div class="layout">
+        <header class="topbar">
+            <button class="topbar-profile-btn" onclick="go('perfil')">
+                <div class="topbar-avatar" id="topbar-avatar">U</div>
+                <span id="topbar-name">Usuario</span>
+            </button>
+        </header>
+        <main id="content"></main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="sections.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
